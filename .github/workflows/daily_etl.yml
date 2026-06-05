@@ -2,28 +2,19 @@ name: Daily Stock ETL
 
 on:
   schedule:
-    # 4:00 PM Taiwan Time (UTC+8) on every weekday
-    # TWSE closes at 1:30 PM; this runs 2.5 hrs after close
     - cron: '0 8 * * 1-5'
-  workflow_dispatch:   # Also allows manual trigger from GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   etl:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
-
       - name: Install dependencies
-        run: pip install -r requirements.txt
-
+        run: pip install -r requirements.txt "yfinance>=1.4.1"
       - name: Run ETL pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
