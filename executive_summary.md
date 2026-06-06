@@ -1,10 +1,8 @@
-# Taiwan 50 Stock Intelligence Dashboard
-### Executive Summary
-
-**Student:** [Your Name / Student ID]  
-**Course:** [Course Name]  
-**Deployment URL:** `https://[your-app-name].streamlit.app`  
-**GitHub:** `https://github.com/[your-username]/taiwan-stock-dashboard`
+# Taiwan 50 Stock Intelligence Dashboard ### Executive Summary
+**Student:** [黃珽威 /B12303069 ]  
+**Course:** [Data Visualization with Modern Data Science]  
+**Deployment URL:** `https://taiwan-stock-dashboard-nw2yhx8kospgeczq9lerje.streamlit.app`  
+**GitHub:** `https://github.com/william6666-2222/taiwan-stock-dashboard`
 
 ---
 
