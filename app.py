@@ -53,6 +53,20 @@ def last_refresh() -> str:
         return result.data[0]["refreshed_at"][:16].replace("T", " ") + " UTC"
     return "Not yet run"
 
+@st.cache_data(ttl=300)
+def latest_data_date() -> str:
+    result = (
+        _client()
+        .table("stock_daily")
+        .select("date")
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        return result.data[0]["date"]
+    return "N/A"
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## Taiwan 50\nStock Intelligence")
@@ -76,6 +90,7 @@ with st.sidebar:
         format_func=lambda x: f"{x} days",
     )
     st.caption(f"Last pipeline run\n{last_refresh()}")
+    st.caption(f"📅 Latest data in DB: **{latest_data_date()}**")
     if st.button("Clear cache"):
         st.cache_data.clear()
         st.rerun()
