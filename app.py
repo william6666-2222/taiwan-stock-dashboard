@@ -53,35 +53,19 @@ def last_refresh() -> str:
         return result.data[0]["refreshed_at"][:16].replace("T", " ") + " UTC"
     return "Not yet run"
 
-@st.cache_data(ttl=300)
-def latest_data_date() -> str:
-    result = (
-        _client()
-        .table("stock_daily")
-        .select("date")
-        .order("date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if result.data:
-        return result.data[0]["date"]
-    return "N/A"
+# FIX 5: Emojis added back to page names
+PAGES = [
+    "📊 Market Overview",
+    "🔍 Stock Explorer",
+    "📉 Technical Signals",
+    "🏭 Sector Analysis",
+    "🔗 Correlation",
+]
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## Taiwan 50\nStock Intelligence")
+    st.markdown("## 🇹🇼 Taiwan 50\nStock Intelligence")
     st.divider()
-    page = st.radio(
-        "Navigate",
-        [
-            "Market Overview",
-            "Stock Explorer",
-            "Technical Signals",
-            "Sector Analysis",
-            "Correlation",
-        ],
-        label_visibility="collapsed",
-    )
+    page = st.radio("Navigate", PAGES, label_visibility="collapsed")
     st.divider()
     days = st.select_slider(
         "Lookback period",
@@ -89,17 +73,15 @@ with st.sidebar:
         value=90,
         format_func=lambda x: f"{x} days",
     )
-    st.caption(f"Last pipeline run\n{last_refresh()}")
-    st.caption(f"📅 Latest data in DB: **{latest_data_date()}**")
+    st.caption(f"🔄 Pipeline last run\n{last_refresh()}")
     if st.button("Clear cache"):
         st.cache_data.clear()
         st.rerun()
-
     st.divider()
+    # FIX: Run pipeline button
     if st.button("Run pipeline now", type="primary"):
         import requests as req
         raw = st.secrets.get("GITHUB_TOKEN", "")
-        # Strip whitespace and remove any non-ASCII characters
         token = str(raw).strip().encode("ascii", errors="ignore").decode("ascii")
         if not token:
             st.warning("GITHUB_TOKEN not set in Streamlit secrets.")
@@ -130,9 +112,15 @@ if df.empty:
 
 latest = df.sort_values("date").groupby("ticker").last().reset_index()
 
+# FIX 3: Use st.markdown so bold renders correctly
+data_start = df["date"].min().strftime("%Y-%m-%d")
+data_end   = df["date"].max().strftime("%Y-%m-%d")
+with st.sidebar:
+    st.markdown(f"📅 Data: `{data_start}` → `{data_end}`")
+
 # ── Page 1: Market Overview ───────────────────────────────────────────────────
-if page == "Market Overview":
-    st.title("Taiwan 50 - Market Overview")
+if page == "📊 Market Overview":
+    st.title("📊 Taiwan 50 · Market Overview")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Stocks tracked", len(latest))
@@ -145,6 +133,7 @@ if page == "Market Overview":
 
     st.divider()
     st.subheader("Performance heatmap")
+    st.caption("Size = trading volume · Color = daily return (%)")
     fig_map = px.treemap(
         latest,
         path=[px.Constant("Taiwan 50"), "sector", "name"],
@@ -160,22 +149,25 @@ if page == "Market Overview":
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("Top 5 gainers")
+        st.subheader("🔺 Top 5 gainers")
         top = (latest.nlargest(5, "daily_return")
-               [["name","close","daily_return","volume"]]
-               .rename(columns={"name":"Company","close":"Price (TWD)","daily_return":"Return %","volume":"Volume"}))
-        top["Return %"] = top["Return %"].map("{:+.2f}%".format)
+               [["name","close","daily_return","volume"]].copy())
+        # FIX 4: Volume formatting
+        top["volume"] = top["volume"].apply(lambda x: f"{int(x):,}")
+        top["daily_return"] = top["daily_return"].map("{:+.2f}%".format)
+        top.columns = ["Company","Price (TWD)","Return %","Volume"]
         st.dataframe(top, hide_index=True, use_container_width=True)
     with col2:
-        st.subheader("Top 5 losers")
+        st.subheader("🔻 Top 5 losers")
         bot = (latest.nsmallest(5, "daily_return")
-               [["name","close","daily_return","volume"]]
-               .rename(columns={"name":"Company","close":"Price (TWD)","daily_return":"Return %","volume":"Volume"}))
-        bot["Return %"] = bot["Return %"].map("{:+.2f}%".format)
+               [["name","close","daily_return","volume"]].copy())
+        bot["volume"] = bot["volume"].apply(lambda x: f"{int(x):,}")
+        bot["daily_return"] = bot["daily_return"].map("{:+.2f}%".format)
+        bot.columns = ["Company","Price (TWD)","Return %","Volume"]
         st.dataframe(bot, hide_index=True, use_container_width=True)
 
     st.divider()
-    st.subheader(f"Cumulative returns - top 5 stocks (last {days} days)")
+    st.subheader(f"Cumulative returns — top 5 stocks (last {days} days)")
     top5_tkrs = df.groupby("ticker")["daily_return"].mean().nlargest(5).index.tolist()
     df5 = df[df["ticker"].isin(top5_tkrs)].sort_values(["ticker","date"]).copy()
     first_close = df5.groupby("ticker")["close"].transform("first")
@@ -187,13 +179,13 @@ if page == "Market Overview":
     st.plotly_chart(fig_cum, use_container_width=True)
 
 # ── Page 2: Stock Explorer ────────────────────────────────────────────────────
-elif page == "Stock Explorer":
-    st.title("Stock Explorer")
+elif page == "🔍 Stock Explorer":
+    st.title("🔍 Stock Explorer")
 
-    tickers = sorted(df["ticker"].unique())
+    tickers  = sorted(df["ticker"].unique())
     name_map = df[["ticker","name"]].drop_duplicates().set_index("ticker")["name"].to_dict()
     sel = st.selectbox("Select a stock", tickers,
-                       format_func=lambda t: f"{t}  {name_map.get(t,t)}")
+                       format_func=lambda t: f"{t}  ·  {name_map.get(t,t)}")
 
     s = df[df["ticker"] == sel].sort_values("date")
     if s.empty:
@@ -201,13 +193,16 @@ elif page == "Stock Explorer":
         st.stop()
 
     row = s.iloc[-1]
+    # FIX 6: RSI delta_color
+    rsi_val = float(row["rsi"])
+    rsi_lbl = "Overbought" if rsi_val > 70 else ("Oversold" if rsi_val < 30 else "Neutral")
+    rsi_color = "inverse" if rsi_val > 70 else ("off" if rsi_val < 30 else "off")
+
     c1,c2,c3,c4,c5 = st.columns(5)
     c1.metric("Close (TWD)", f"{row['close']:,.1f}", f"{row['daily_return']:+.2f}%")
-    c2.metric("MA20", f"{row['ma20']:,.1f}")
-    c3.metric("MA60", f"{row['ma60']:,.1f}")
-    rsi_val = row["rsi"]
-    rsi_lbl = "Overbought" if rsi_val > 70 else ("Oversold" if rsi_val < 30 else "Neutral")
-    c4.metric("RSI 14", f"{rsi_val:.1f}", rsi_lbl)
+    c2.metric("MA20",  f"{row['ma20']:,.1f}")
+    c3.metric("MA60",  f"{row['ma60']:,.1f}")
+    c4.metric("RSI 14", f"{rsi_val:.1f}", rsi_lbl, delta_color=rsi_color)
     c5.metric("Ann. volatility", f"{row['volatility']:.1f}%")
 
     fig_cs = go.Figure()
@@ -218,52 +213,54 @@ elif page == "Stock Explorer":
                                 line=dict(color="#f39c12", width=1.5)))
     fig_cs.add_trace(go.Scatter(x=s["date"], y=s["ma60"], name="MA60",
                                 line=dict(color="#3498db", width=1.5)))
-    fig_cs.update_layout(title=f"{sel} - {name_map.get(sel,'')}",
-                         height=420, xaxis_rangeslider_visible=False,
-                         template="plotly_white", legend=dict(orientation="h", y=1.02))
+    fig_cs.update_layout(
+        title=f"{sel} · {name_map.get(sel,'')}",
+        height=420, xaxis_rangeslider_visible=False,
+        template="plotly_white", legend=dict(orientation="h", y=1.02))
     st.plotly_chart(fig_cs, use_container_width=True)
 
     col1, col2 = st.columns(2)
     with col1:
         colors = ["#e74c3c" if r >= 0 else "#2ecc71" for r in s["daily_return"].fillna(0)]
         fig_vol = go.Figure(go.Bar(x=s["date"], y=s["volume"], marker_color=colors))
-        fig_vol.update_layout(title="Volume", height=260, template="plotly_white", showlegend=False)
+        fig_vol.update_layout(title="Volume", height=260,
+                               template="plotly_white", showlegend=False)
         st.plotly_chart(fig_vol, use_container_width=True)
     with col2:
         fig_rsi = go.Figure()
         fig_rsi.add_hrect(y0=70, y1=100, fillcolor="red", opacity=0.06, line_width=0)
-        fig_rsi.add_hrect(y0=0, y1=30, fillcolor="green", opacity=0.06, line_width=0)
+        fig_rsi.add_hrect(y0=0,  y1=30,  fillcolor="green", opacity=0.06, line_width=0)
         fig_rsi.add_trace(go.Scatter(x=s["date"], y=s["rsi"], name="RSI",
                                      line=dict(color="#9b59b6", width=1.5)))
-        fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", line_width=0.8)
+        fig_rsi.add_hline(y=70, line_dash="dash", line_color="red",   line_width=0.8)
         fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", line_width=0.8)
         fig_rsi.update_layout(title="RSI (14)", height=260, template="plotly_white",
                                yaxis=dict(range=[0,100]), showlegend=False)
         st.plotly_chart(fig_rsi, use_container_width=True)
 
 # ── Page 3: Technical Signals ─────────────────────────────────────────────────
-elif page == "Technical Signals":
-    st.title("Technical Signals Scanner")
+elif page == "📉 Technical Signals":
+    st.title("📉 Technical Signals Scanner")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("RSI alerts")
+        st.subheader("RSI Alerts")
         oversold   = latest[latest["rsi"] < 30][["name","ticker","rsi","close"]].sort_values("rsi")
         overbought = latest[latest["rsi"] > 70][["name","ticker","rsi","close"]].sort_values("rsi", ascending=False)
-        st.markdown("**Oversold - RSI < 30 (potential buy zone)**")
+        st.markdown("**🟢 Oversold — RSI < 30 (potential buy zone)**")
         if not oversold.empty:
             st.dataframe(oversold.rename(columns={"name":"Company","close":"Price (TWD)"}),
                          hide_index=True, use_container_width=True)
         else:
             st.info("No oversold stocks at this time.")
-        st.markdown("**Overbought - RSI > 70 (potential sell zone)**")
+        st.markdown("**🔴 Overbought — RSI > 70 (potential sell zone)**")
         if not overbought.empty:
             st.dataframe(overbought.rename(columns={"name":"Company","close":"Price (TWD)"}),
                          hide_index=True, use_container_width=True)
         else:
             st.info("No overbought stocks at this time.")
     with col2:
-        st.subheader("Risk-return scatter")
+        st.subheader("Risk–Return Scatter")
         fig_rr = px.scatter(latest, x="volatility", y="daily_return", color="sector",
                             hover_name="name", hover_data={"ticker": True, "close": ":,.0f"},
                             labels={"volatility":"Ann. volatility (%)","daily_return":"Daily return (%)"})
@@ -272,17 +269,18 @@ elif page == "Technical Signals":
         st.plotly_chart(fig_rr, use_container_width=True)
 
     st.divider()
-    st.subheader("MA crossover signals")
-    latest["signal"] = np.where(latest["ma20"] > latest["ma60"],
-                                "Golden cross (MA20 > MA60)",
-                                "Death cross (MA20 < MA60)")
-    sig_df = latest[["name","ticker","close","ma20","ma60","signal"]].copy()
+    st.subheader("MA Crossover Signals")
+    # FIX 2: Use copy() to avoid mutating global latest
+    sig_df = latest[["name","ticker","close","ma20","ma60"]].copy()
+    sig_df["Signal"] = np.where(sig_df["ma20"] > sig_df["ma60"],
+                                "🟡 Golden cross (MA20 > MA60)",
+                                "💀 Death cross  (MA20 < MA60)")
     sig_df.columns = ["Company","Ticker","Price (TWD)","MA20","MA60","Signal"]
     st.dataframe(sig_df, hide_index=True, use_container_width=True)
 
 # ── Page 4: Sector Analysis ───────────────────────────────────────────────────
-elif page == "Sector Analysis":
-    st.title("Sector Analysis")
+elif page == "🏭 Sector Analysis":
+    st.title("🏭 Sector Analysis")
 
     sector = (latest.groupby("sector")
               .agg(avg_return=("daily_return","mean"), avg_rsi=("rsi","mean"),
@@ -312,13 +310,13 @@ elif page == "Sector Analysis":
         fig_scat.update_layout(height=380, showlegend=False)
         st.plotly_chart(fig_scat, use_container_width=True)
 
-    st.subheader("Sector summary table")
+    st.subheader("Sector Summary Table")
     sector.columns = ["Sector","Avg return (%)","Avg RSI","Avg volatility (%)","# stocks","Total volume"]
     st.dataframe(sector, hide_index=True, use_container_width=True)
 
 # ── Page 5: Correlation ───────────────────────────────────────────────────────
-elif page == "Correlation":
-    st.title("Correlation Analysis")
+elif page == "🔗 Correlation":
+    st.title("🔗 Correlation Analysis")
 
     st.info(
         "Correlation measures how similarly two stocks move. "
@@ -327,7 +325,7 @@ elif page == "Correlation":
         "Close to 0 = independent."
     )
 
-    pivot = df.pivot_table(index="date", columns="ticker", values="daily_return")
+    pivot    = df.pivot_table(index="date", columns="ticker", values="daily_return")
     name_map = df[["ticker","name"]].drop_duplicates().set_index("ticker")["name"].to_dict()
     pivot.columns = [name_map.get(t, t) for t in pivot.columns]
     corr = pivot.corr().round(2)
@@ -345,7 +343,7 @@ elif page == "Correlation":
     st.plotly_chart(fig_corr, use_container_width=True)
 
     st.divider()
-    st.subheader("Correlation ranking")
+    st.subheader("Correlation Ranking")
     pairs = []
     cols_list = list(corr.columns)
     for i, j in itertools.combinations(range(len(cols_list)), 2):
@@ -355,10 +353,10 @@ elif page == "Correlation":
 
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("**Highest positive correlation (concentrated risk)**")
+        st.markdown("**🔴 Highest positive correlation (concentrated risk)**")
         st.dataframe(pairs_df.head(5).reset_index(drop=True),
                      hide_index=True, use_container_width=True)
     with c2:
-        st.markdown("**Lowest correlation (best diversification)**")
+        st.markdown("**🔵 Lowest correlation (best diversification)**")
         st.dataframe(pairs_df.tail(5).reset_index(drop=True),
                      hide_index=True, use_container_width=True)
