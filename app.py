@@ -82,20 +82,30 @@ with st.sidebar:
 
     st.divider()
     if st.button("Run pipeline now", type="primary"):
-        import requests
-        token = st.secrets.get("GITHUB_TOKEN", "")
-        if token:
-            r = requests.post(
-                "https://api.github.com/repos/william6666-2222/taiwan-stock-dashboard/actions/workflows/daily_etl.yml/dispatches",
-                headers={"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"},
-                json={"ref": "main"}
-            )
-            if r.status_code == 204:
-                st.success("Pipeline triggered! Data will update in ~2 minutes.")
-            else:
-                st.error(f"Failed: {r.status_code}")
+        import requests as req
+        raw = st.secrets.get("GITHUB_TOKEN", "")
+        # Strip whitespace and remove any non-ASCII characters
+        token = str(raw).strip().encode("ascii", errors="ignore").decode("ascii")
+        if not token:
+            st.warning("GITHUB_TOKEN not set in Streamlit secrets.")
         else:
-            st.warning("GITHUB_TOKEN not set in secrets.")
+            try:
+                r = req.post(
+                    "https://api.github.com/repos/william6666-2222/taiwan-stock-dashboard"
+                    "/actions/workflows/daily_etl.yml/dispatches",
+                    headers={
+                        "Authorization": "token " + token,
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                    json={"ref": "main"},
+                    timeout=10,
+                )
+                if r.status_code == 204:
+                    st.success("Pipeline triggered! Data updates in ~2 min.")
+                else:
+                    st.error(f"GitHub API error {r.status_code}")
+            except Exception as e:
+                st.error(f"Request failed: {e}")
 
 df = load_data(days)
 
