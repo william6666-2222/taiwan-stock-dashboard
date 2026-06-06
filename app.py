@@ -80,6 +80,23 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
 
+    st.divider()
+    if st.button("Run pipeline now", type="primary"):
+        import requests
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        if token:
+            r = requests.post(
+                "https://api.github.com/repos/william6666-2222/taiwan-stock-dashboard/actions/workflows/daily_etl.yml/dispatches",
+                headers={"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"},
+                json={"ref": "main"}
+            )
+            if r.status_code == 204:
+                st.success("Pipeline triggered! Data will update in ~2 minutes.")
+            else:
+                st.error(f"Failed: {r.status_code}")
+        else:
+            st.warning("GITHUB_TOKEN not set in secrets.")
+
 df = load_data(days)
 
 if df.empty:
