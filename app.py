@@ -361,3 +361,4 @@ elif page == "🔗 Correlation":
         st.markdown("**🔵 Lowest correlation (best diversification)**")
         st.dataframe(pairs_df.tail(5).reset_index(drop=True),
                      hide_index=True, use_container_width=True)
+# deployed 2026年 6月 7日 星期日 17時40分38秒 CST
