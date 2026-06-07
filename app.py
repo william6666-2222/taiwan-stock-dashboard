@@ -60,7 +60,11 @@ def last_refresh() -> str:
         .execute()
     )
     if result.data:
-        return result.data[0]["refreshed_at"][:16].replace("T", " ") + " UTC"
+        from datetime import timezone, timedelta
+        utc_str = result.data[0]["refreshed_at"]
+        utc_dt  = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+        twn_dt  = utc_dt.astimezone(timezone(timedelta(hours=8)))
+        return twn_dt.strftime("%Y-%m-%d %H:%M") + " TWN (台灣時間)"
     return "Not yet run"
 
 # FIX 5: Emojis added back to page names
