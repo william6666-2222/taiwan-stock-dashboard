@@ -30,6 +30,7 @@ def load_data(days: int) -> pd.DataFrame:
         .select("ticker,date,open,high,low,close,volume,daily_return,ma20,ma60,rsi,volatility,name,sector")
         .gte("date", since)
         .order("date")
+        .limit(10000)   # Supabase default is 1000 — must override for full-year queries
         .execute()
     )
     df = pd.DataFrame(result.data)
