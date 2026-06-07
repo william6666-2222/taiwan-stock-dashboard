@@ -24,16 +24,25 @@ def _client():
 @st.cache_data(ttl=1800)
 def load_data(days: int) -> pd.DataFrame:
     since = (datetime.now() - timedelta(days=days)).date().isoformat()
-    result = (
-        _client()
-        .table("stock_daily")
-        .select("ticker,date,open,high,low,close,volume,daily_return,ma20,ma60,rsi,volatility,name,sector")
-        .gte("date", since)
-        .order("date")
-        .limit(10000)   # Supabase default is 1000 — must override for full-year queries
-        .execute()
-    )
-    df = pd.DataFrame(result.data)
+    # Supabase server caps at 1000 rows — use pagination to fetch all data
+    all_rows, start, page = [], 0, 900
+    while True:
+        result = (
+            _client()
+            .table("stock_daily")
+            .select("ticker,date,open,high,low,close,volume,daily_return,ma20,ma60,rsi,volatility,name,sector")
+            .gte("date", since)
+            .order("date")
+            .range(start, start + page - 1)
+            .execute()
+        )
+        if not result.data:
+            break
+        all_rows.extend(result.data)
+        if len(result.data) < page:
+            break
+        start += page
+    df = pd.DataFrame(all_rows)
     if not df.empty:
         df["date"] = pd.to_datetime(df["date"])
         num_cols = ["open","high","low","close","daily_return","ma20","ma60","rsi","volatility"]
